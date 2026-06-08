@@ -23,6 +23,7 @@ Tool to benchmark **LLM compute performance** and **communication cost** for mod
 ---
 
 ## Inputs
+
 - **Model** 
 - **Batch size**
 - **Sequence length**

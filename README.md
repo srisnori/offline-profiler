@@ -20,7 +20,6 @@ Tool to benchmark **LLM compute performance** and **communication cost** for mod
   - number of heads
   - model architecture
 
----
 
 ## Inputs
 
@@ -32,7 +31,7 @@ Tool to benchmark **LLM compute performance** and **communication cost** for mod
 - **GPU memory (GB)**
 - **IP addresses**
 
----
+
 
 ## Outputs
 
@@ -43,7 +42,7 @@ Tool to benchmark **LLM compute performance** and **communication cost** for mod
 - **Bandwidth**
 - **T_comm** → Communication time
 
----
+
 
 ## Run
 

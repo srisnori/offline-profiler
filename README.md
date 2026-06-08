@@ -1,6 +1,6 @@
 # Offline LLM Profiler
 
-Tool to benchmark **LLM compute performance** and ** communication cost** for models.
+Tool to benchmark **LLM compute performance** and **communication cost** for models.
 
 ---
 - Benchmarks:

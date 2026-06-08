@@ -2,7 +2,6 @@
 
 Tool to benchmark **LLM compute performance** and **communication cost** for models.
 
----
 - Benchmarks:
   - **MLP** 
   - **Multi-Head Attention**

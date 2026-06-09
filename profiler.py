@@ -13,7 +13,7 @@ from gqa_benchmark import GQA_CPU, GQA_GPU
 model_name = input("Model: ")
 batch_size = int(input("Batch Size: "))
 seq_len = int(input("Seq length: "))
-attention_mechanism = input("Attention (MHA/GQA/MQA): ")
+attention_mechanism = input("Attention (MHA/GQA/MLP): ")
 gpu_type = input("GPU: ")
 gpu_mem = int(input("GPU Memory (GB): "))
 ips = input("Distributed IPs (space-separated): ").split()
@@ -43,7 +43,7 @@ time.sleep(0.5)
 bandwidth = send_bandwidth(ip, data, port)
 receiver_thread.join()
 
-communication = communication_time(network, bandwidth, data_size)
+communication = communication_time(network, bandwidth, batch_size, seq_len, embed_dim)
 
 # outpts
 print(f"MLP Time (CPU): {mlp_cpu:.4f} seconds")

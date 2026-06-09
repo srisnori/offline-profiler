@@ -1,3 +1,4 @@
+# measures only one TCP transfer connection
 import socket
 
 def receive_bandwidth(port):

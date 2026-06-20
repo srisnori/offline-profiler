@@ -3,9 +3,9 @@
 Tool to benchmark **LLM compute performance** and **communication cost** for models.
 
 - Benchmarks:
-  - **MLP** 
-  - **Multi-Head Attention**
-  - **Grouped Query Attention**
+  - MLP
+  - Multi-Head Attention
+  - Grouped Query Attention
 
 - Measures:
   - CPU compute time

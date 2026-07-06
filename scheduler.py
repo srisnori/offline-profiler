@@ -12,11 +12,13 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn, latency, bandwidth, batchSi
         for l in range(numLayers + 1): # how many layers can u fit in that node
             for k in range(l + 1): # how many layers are in the current node
                 prev = dp[i - 1][k] # look at previous answers and find the best solution for rest of layers
-                if prev < INF:
+                if prev == INF:
                     continue
                 
                 layersNode = l - k
-                cost = node_cost(numLayers, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim)
+                if layersNode == 0:
+                    continue
+                cost = node_cost(layersNode, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim)
                 res = prev + cost
 
                 if res < dp[i][l]:

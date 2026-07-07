@@ -16,7 +16,10 @@ def MHA_GPU(embed_dim, batch_size, seq_len, num_heads):
         mha(x, x, x)
     torch.cuda.synchronize()
 
+    runs = 10                                  
     start = time.time()
-    mha(x, x, x)
+    for _ in range(runs):
+        mha(x, x, x)
     torch.cuda.synchronize()
-    return time.time() - start
+    return (time.time() - start) / runs
+

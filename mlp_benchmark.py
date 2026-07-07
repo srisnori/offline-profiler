@@ -9,15 +9,13 @@ def MLP_CPU(embed_dim, batch_size, seq_len):
     return time.time() - start
 
 def MLP_GPU(embed_dim, batch_size, seq_len):
-    mlp = torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim)).cuda()
-    x = torch.rand(batch_size, seq_len, embed_dim).cuda()
+    mlp = torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim)).cuda().half()
+    x = torch.rand(batch_size, seq_len, embed_dim).cuda().half()
 
-    # warmup
     for _ in range(3):
         mlp(x)
     torch.cuda.synchronize()
 
-    # actual timing
     start = time.time()
     mlp(x)
     torch.cuda.synchronize()

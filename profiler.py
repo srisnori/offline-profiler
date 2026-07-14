@@ -64,6 +64,7 @@ layers_assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
+    gpuMem=gpu_mem,
 )
 
 print(f"Model: {model_name}")

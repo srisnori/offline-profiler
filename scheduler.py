@@ -18,7 +18,7 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn, latency, bandwidth, batchSi
                 layersNode = l - k
                 if layersNode == 0:
                     continue
-                cost = node_cost(layersNode, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim)
+                cost = node_cost(layersNode, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem)
                 res = max(prev, cost)
 
                 if res < dp[i][l]:

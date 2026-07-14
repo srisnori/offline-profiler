@@ -1,7 +1,7 @@
 import math
 from performance_model import node_cost
 
-def dp_scheduler(numLayers, numNodes, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim):
+def dp_scheduler(numLayers, numNodes, t_mlp, t_attn, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem):
     INF = float("inf")
 
     dp = [[INF] * (numLayers + 1) for i in range(numNodes + 1)]

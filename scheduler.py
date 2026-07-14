@@ -9,7 +9,7 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
     dp[0][0] = 0  # dp[nodes][layers] best way to put these many layers into these many nodes
 
     for i in range(1, numNodes + 1): # which node we are on
-        for l in range(numLayers + 1): # how many layers can u fit in that node
+        for l in range(1, numLayers + 1): # how many layers can u fit in that node
             for k in range(l + 1): # how many layers are in the current node
                 prev = dp[i - 1][k] # look at previous answers and find the best solution for rest of layers
                 if prev == INF:

@@ -1,11 +1,5 @@
 # Offline Profiler
 
-An offline profiling and layer-placement tool for Large Language Models (LLMs) executing across heterogeneous, geo-distributed clusters. Based on the performance model and placement strategies from the **BloomBee** inference framework.
-
-The profiler benchmarks local accelerator compute speeds (CPU/CUDA GPU), measures inter-node network topologies, and calculates the optimal pipeline layer assignment using Dynamic Programming.
-
----
-
 ## Key Features
 
 - **Device Diagnostics:** Automatic detection of execution substrate (`CUDA` / `CPU`) with GPU memory auto-allocation.

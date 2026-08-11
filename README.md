@@ -1,4 +1,4 @@
-# Offline LLM Profiler & Placement Solver
+# Offline Profiler
 
 An offline profiling and layer-placement tool for Large Language Models (LLMs) executing across heterogeneous, geo-distributed clusters. Based on the performance model and placement strategies from the **BloomBee** inference framework.
 

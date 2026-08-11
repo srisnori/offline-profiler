@@ -51,7 +51,7 @@ When running `profiler.py`, you will be prompted for:
 ### 1. Clone & Setup Environment
 
 ```bash
-git clone [https://github.com/srisnori/offline-profiler.git](https://github.com/srisnori/offline-profiler.git)
+git clone https://github.com/srisnori/offline-profiler.git
 cd offline-profiler
 
 python3 -m venv venv

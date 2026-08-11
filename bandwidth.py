@@ -1,20 +1,11 @@
+# preset envs for testing
 GBPS = 1_000_000_000
 MBPS = 1_000_000
-
 
 def mbps_to_bytes(mbps):
     return (mbps * MBPS) / 8
 
-
-ENVIRONMENTS = {
-    "E1": {"description": "45 Gbps single-cluster", "bandwidth": mbps_to_bytes(45000)},
-    "E2": {"description": "500 Mbps homogeneous", "bandwidth": mbps_to_bytes(500)},
-    "E3": {"description": "250 Mbps homogeneous", "bandwidth": mbps_to_bytes(250)},
-    "E4": {"description": "125 Mbps homogeneous", "bandwidth": mbps_to_bytes(125)},
-    "E5": {"description": "20 Mbps homogeneous", "bandwidth": mbps_to_bytes(20)},
-}
-
-E6 = {
+E6_RATES = {
     ("California", "New Jersey"): 312,
     ("California", "Canada"): 280,
     ("New Jersey", "California"): 347,
@@ -23,15 +14,37 @@ E6 = {
     ("Canada", "New Jersey"): 577,
 }
 
-# Chameleon Cloud bare-metal interconnects default to 10 Gbps (10,000 Mbps = 1.25 GB/s)
-DEFAULT_CHAMELEON_MBPS = 10000
+ENVIRONMENTS = {
+    "E1": {
+        "description": "45 Gbps single-cluster",
+        "bandwidth": mbps_to_bytes(45000),
+    },
+    "E2": {
+        "description": "500 Mbps homogeneous",
+        "bandwidth": mbps_to_bytes(500),
+    },
+    "E3": {
+        "description": "250 Mbps homogeneous",
+        "bandwidth": mbps_to_bytes(250),
+    },
+    "E4": {
+        "description": "125 Mbps homogeneous",
+        "bandwidth": mbps_to_bytes(125),
+    },
+    "E5": {
+        "description": "20 Mbps homogeneous",
+        "bandwidth": mbps_to_bytes(20),
+    },
+    "E6": {
+        "description": "Heterogeneous WAN matrix",
+        "matrix": {
+            pair: mbps_to_bytes(mbps) for pair, mbps in E6_RATES.items()
+        },
+    },
+}
 
-
-def get_bandwidth(sender=None, receiver=None, env=None, default_mbps=DEFAULT_CHAMELEON_MBPS):
-    """
-    Returns bandwidth in bytes/sec.
-    Supports preset environments (E1-E6) or explicit sender/receiver pairs.
-    """
+# use envs or user inputs
+def get_bandwidth(sender=None, receiver=None, env=None):
     if env:
         env = env.upper()
         if env in ENVIRONMENTS:
@@ -47,11 +60,7 @@ def get_bandwidth(sender=None, receiver=None, env=None, default_mbps=DEFAULT_CHA
             raise ValueError(f"Unknown environment preset: {env}")
 
     if sender and receiver:
-        # Check if region names were passed directly
         if (sender, receiver) in E6:
             return mbps_to_bytes(E6[(sender, receiver)])
-
-        # Return default Chameleon link speed for custom IP pairs
         return mbps_to_bytes(default_mbps)
-
     raise ValueError("Must specify either a preset environment 'env' or valid IP pairs.")

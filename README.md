@@ -9,7 +9,7 @@
   - Multi-Layer Perceptron (**MLP**)
 - **Network Matrix Profiling:**
   - Inter-node latency ($d_{i \to j}$) and bandwidth ($B_{i \to j}$).
-- **Evaluation Environment Presets ($E_1$–$E_6$):** Built-in support for BloomBee evaluation environments:
+- **Evaluation Environment Presets ($E_1-E_6$):** Built-in support for BloomBee evaluation environments:
   - **E1–E5:** Controlled homogeneous setups ($45\text{ Gbps}$ cluster down to $20\text{ Mbps}$).
   - **E6:** Measured heterogeneous WAN matrix across California, New Jersey, and Canada.
 - **Dynamic Programming Placement Solver (`dp_scheduler`):** Automatically computes the optimal pipeline layer split per node (e.g., `[13, 13, 14]`) to minimize end-to-end execution latency.

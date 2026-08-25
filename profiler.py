@@ -145,7 +145,7 @@ else:
     node_a, node_b = nodes[0], nodes[1]
     lat_ab = graph[node_a][node_b]["latency"]
     bw_ab = graph[node_a][node_b]["bandwidth"]
-    t_comm_ab = graph[node_a][node_b]["t_comm"]
+    t_comm_ab = graph[node_a].get(node_b, {}).get("t_comm", communication_time(lat_ab, bw_ab, batch_size, seq_len, embed_dim),)
 
 # Dynamic Programming Scheduler 
 print("\n--- Running Dynamic Programming Scheduler ---")
@@ -160,6 +160,7 @@ assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
+    gpuMem=nodes_gpu_config,
     minGpuMem=4.0,
 )
 

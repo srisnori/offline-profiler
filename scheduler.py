@@ -4,7 +4,6 @@ from performance_model import node_cost
 def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem, minGpuMem=4.0):
     INF = float("inf")
 
-    # 1. Normalize GPU config per node
     if isinstance(gpuMem, (int, float)):
         nodes_gpu_config = [[float(gpuMem)] for _ in range(numNodes)]
     elif isinstance(gpuMem, list):
@@ -21,7 +20,7 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
     else:
         raise TypeError("gpuMem must be a float, int, or list.")
 
-    # 2. Check per-GPU minimum memory threshold
+    # check per-GPU minimum memory 
     for node_idx, gpus in enumerate(nodes_gpu_config):
         for gpu_idx, mem in enumerate(gpus):
             if mem < minGpuMem:
@@ -30,14 +29,14 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                     f"which is below the minimum required threshold of {minGpuMem:.2f} GB."
                 )
 
-    # 3. Calculate total aggregated VRAM per node
+    # calculate total VRAM per node
     node_vram_totals = [sum(gpus) for gpus in nodes_gpu_config]
 
     dp = [[INF] * (numLayers + 1) for _ in range(numNodes + 1)]
     split = [[-1] * (numLayers + 1) for _ in range(numNodes + 1)]
     dp[0][0] = 0.0
 
-    # 4. DP Recurrence
+    # DP Recurrence
     for i in range(1, numNodes + 1):
         current_node_mem = node_vram_totals[i - 1]
 
@@ -72,12 +71,11 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                     dp[i][l] = res
                     split[i][l] = k
 
-    # 5. Feasibility Check
     if dp[numNodes][numLayers] == INF:
         print("No layer assignment found.")
         return [], INF
 
-    # 6. Backtrack Solution
+    # backtrack
     layersAssigned = []
     l = numLayers
     for i in range(numNodes, 0, -1):

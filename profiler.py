@@ -33,11 +33,7 @@ elif use_preset:
 else:
     print("[Mode] Custom IP Profiling selected.")
     raw_ips = input("Enter Distributed IPs (comma-separated): ").strip()
-    nodes = [
-        ip.strip()
-        for ip in raw_ips.split(",")
-        if ip.strip() and not ipaddress.IPv4Address(ip.strip()).is_unspecified
-    ]
+    nodes = [ip.strip() for ip in raw_ips.split(",") if ip.strip() and not ipaddress.IPv4Address(ip.strip()).is_unspecified]
     if not nodes:
         raise ValueError("No valid IP addresses provided. Exiting.")
 
@@ -50,7 +46,6 @@ num_heads = int(input("Num Heads (default 52): ") or 52)
 embed_dim = int(input("Embed Dim (default 6656): ") or 6656)
 attention_mechanism = input("Attention (MHA/GQA/MLP, default 'mha'): ").strip().lower() or "mha"
 
-# Sanity Check
 if embed_dim % num_heads != 0:
     raise ValueError(f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads}).")
 
@@ -157,7 +152,7 @@ else:
     t_comm_ab = graph[node_a].get(node_b, {}).get("t_comm", communication_time(lat_ab, bw_ab, batch_size, seq_len, embed_dim))
 
 # Dynamic Programming Scheduler 
-print("\n--- Running Dynamic Programming Scheduler ---")
+print("\n--- Dynamic Programming Scheduler ---")
 assignment, total_cost = dp_scheduler(
     numLayers=num_layers,
     numNodes=len(nodes),

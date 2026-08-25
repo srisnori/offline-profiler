@@ -116,7 +116,8 @@ graph = {a: {} for a in nodes}
 
 if len(nodes) < 2:
     print("[Warning] Need at least 2 nodes for inter-node profiling.")
-    lat_ab, bw_ab, t_comm_ab = 0.0, 1_250_000_000.0, 0.0
+    edge_latencies = [0.0]
+    edge_bandwidths = [1_250_000_000.0]
 else:
     if use_preset:
         for s in nodes:
@@ -146,10 +147,15 @@ else:
                 graph[s][r]["t_comm"] = t_comm
                 print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
 
-    node_a, node_b = nodes[0], nodes[1]
-    lat_ab = graph[node_a].get(node_b, {}).get("latency", 0.003)
-    bw_ab = graph[node_a].get(node_b, {}).get("bandwidth", 1_250_000_000.0)
-    t_comm_ab = graph[node_a].get(node_b, {}).get("t_comm", communication_time(lat_ab, bw_ab, batch_size, seq_len, embed_dim))
+    # Extract per-edge sequential links: Node 0 -> Node 1, Node 1 -> Node 2
+    edge_latencies = []
+    edge_bandwidths = []
+    for i in range(len(nodes) - 1):
+        s, r = nodes[i], nodes[i + 1]
+        lat = graph[s].get(r, {}).get("latency", 0.003)
+        bw = graph[s].get(r, {}).get("bandwidth", 1_250_000_000.0)
+        edge_latencies.append(lat)
+        edge_bandwidths.append(bw)
 
 # Dynamic Programming Scheduler 
 print("\n--- Dynamic Programming Scheduler ---")
@@ -159,8 +165,8 @@ assignment, total_cost = dp_scheduler(
     t_mlp=mlp_gpu,
     t_attn_gpu=attn_gpu,
     t_attn_cpu=attn_cpu,
-    latency=lat_ab,
-    bandwidth=bw_ab,
+    latency=edge_latencies,
+    bandwidth=edge_bandwidths,
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
@@ -169,8 +175,5 @@ assignment, total_cost = dp_scheduler(
 )
 
 print(f"\nEnvironment Mode: {selected_env if selected_env else 'Custom IPs'}")
-print(f"Inter-Node Latency: {lat_ab:.4f} seconds")
-print(f"Communication Overhead (T_comm): {t_comm_ab:.4f} seconds")
-print(f"Bandwidth: {bw_ab:.2f} bytes/second")
-print(f"\nLayer Assignment per Node: {assignment}")
+print(f"Layer Assignment per Node: {assignment}")
 print(f"Total Cost (DP): {total_cost:.4f}s")

@@ -1,22 +1,26 @@
-import torch, time
+import time
+import torch
 
 def MLP_CPU(embed_dim, batch_size, seq_len):
-    mlp = torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim))
-    x = torch.rand(batch_size, seq_len, embed_dim)
+  mlp = torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim),)
+  x = torch.rand(batch_size, seq_len, embed_dim)
 
-    start = time.time()
+  with torch.no_grad():
+    start = time.perf_counter()
     mlp(x)
-    return time.time() - start
+    return time.perf_counter() - start
+
 
 def MLP_GPU(embed_dim, batch_size, seq_len):
-    mlp = torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim)).cuda().half()
-    x = torch.rand(batch_size, seq_len, embed_dim).cuda().half()
+  mlp = (torch.nn.Sequential(torch.nn.Linear(embed_dim, embed_dim), torch.nn.ReLU(), torch.nn.Linear(embed_dim, embed_dim),).cuda().half())
+  x = torch.rand(batch_size, seq_len, embed_dim, device="cuda", dtype=torch.float16)
 
+  with torch.no_grad():
     for _ in range(3):
-        mlp(x)
+      mlp(x)
     torch.cuda.synchronize()
 
-    start = time.time()
+    start = time.perf_counter()
     mlp(x)
     torch.cuda.synchronize()
-    return time.time() - start
+    return time.perf_counter() - start

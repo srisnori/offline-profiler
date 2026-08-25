@@ -3,7 +3,7 @@ GBPS = 1_000_000_000
 MBPS = 1_000_000
 
 def mbps_to_bytes(mbps):
-    return (mbps * MBPS) / 8
+    return (mbps * MBPS) / 8 # 1.25 Gigabytes per second
 
 E6_RATES = {
     ("California", "New Jersey"): 312,

@@ -40,6 +40,13 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
     for i in range(1, numNodes + 1):
         current_node_mem = node_vram_totals[i - 1]
 
+        if isinstance(latency, list) and isinstance(bandwidth, list):
+            cur_lat = latency[i - 1] if i - 1 < len(latency) else 0.0
+            cur_bw = bandwidth[i - 1] if i - 1 < len(bandwidth) else INF
+        else:
+            cur_lat = latency
+            cur_bw = bandwidth
+
         for l in range(1, numLayers + 1):
             for k in range(l + 1):
                 prev = dp[i - 1][k]
@@ -50,18 +57,8 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                 if layersNode == 0:
                     continue
 
-                cost = node_cost(
-                    layersNode, 
-                    t_mlp, 
-                    t_attn_gpu, 
-                    t_attn_cpu, 
-                    latency, 
-                    bandwidth, 
-                    batchSize, 
-                    seqLen, 
-                    embedDim, 
-                    current_node_mem
-                )
+                cost = node_cost(layersNode, t_mlp, t_attn_gpu, t_attn_cpu, cur_lat, cur_bw, batchSize, seqLen, 
+                    embedDim, current_node_mem)
                 
                 if cost == INF: 
                     continue

@@ -4,6 +4,7 @@ from performance_model import node_cost
 def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem, minGpuMem=4.0):
     INF = float("inf")
 
+    # 1. Normalize GPU config per node
     if isinstance(gpuMem, (int, float)):
         nodes_gpu_config = [[float(gpuMem)] for _ in range(numNodes)]
     elif isinstance(gpuMem, list):
@@ -20,7 +21,7 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
     else:
         raise TypeError("gpuMem must be a float, int, or list.")
 
-    # check per-GPU minimum memory 
+    # 2. Check per-GPU minimum memory threshold
     for node_idx, gpus in enumerate(nodes_gpu_config):
         for gpu_idx, mem in enumerate(gpus):
             if mem < minGpuMem:
@@ -29,41 +30,56 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                     f"which is below the minimum required threshold of {minGpuMem:.2f} GB."
                 )
 
-    # calculate total VRAM per node
+    # 3. Calculate total aggregated VRAM per node
     node_vram_totals = [sum(gpus) for gpus in nodes_gpu_config]
 
-    dp = [[INF] * (numLayers + 1) for i in range(numNodes + 1)]
-    split = [[-1] * (numLayers + 1) for i in range(numNodes + 1)]
-    dp[0][0] = 0  # dp[nodes][layers] best way to put these many layers into these many nodes
+    dp = [[INF] * (numLayers + 1) for _ in range(numNodes + 1)]
+    split = [[-1] * (numLayers + 1) for _ in range(numNodes + 1)]
+    dp[0][0] = 0.0
 
-    for i in range(1, numNodes + 1): # which node we are on
-        current_node_mem = node_vram_totals[i - 1]  # <-- ADDED THIS LINE
+    # 4. DP Recurrence
+    for i in range(1, numNodes + 1):
+        current_node_mem = node_vram_totals[i - 1]
 
-        for l in range(1, numLayers + 1): # how many layers can u fit in that node
-            for k in range(l + 1): # how many layers are in the current node
-                prev = dp[i - 1][k] # look at previous answers and find the best solution for rest of layers
+        for l in range(1, numLayers + 1):
+            for k in range(l + 1):
+                prev = dp[i - 1][k]
                 if prev == INF:
                     continue
                 
                 layersNode = l - k
                 if layersNode == 0:
                     continue
-                cost = node_cost(layersNode, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, current_node_mem)
+
+                cost = node_cost(
+                    layersNode, 
+                    t_mlp, 
+                    t_attn_gpu, 
+                    t_attn_cpu, 
+                    latency, 
+                    bandwidth, 
+                    batchSize, 
+                    seqLen, 
+                    embedDim, 
+                    current_node_mem
+                )
                 
                 if cost == INF: 
                     continue
+
                 res = max(prev, cost)
                 if res < dp[i][l]:
                     dp[i][l] = res
                     split[i][l] = k
 
+    # 5. Feasibility Check
     if dp[numNodes][numLayers] == INF:
         print("No layer assignment found.")
         return [], INF
 
+    # 6. Backtrack Solution
     layersAssigned = []
     l = numLayers
-
     for i in range(numNodes, 0, -1):
         k = split[i][l]
         layersAssigned.append(l - k)

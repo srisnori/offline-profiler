@@ -1,4 +1,5 @@
 import ipaddress
+import statistics
 import torch
 
 from bandwidth import ENVIRONMENTS, get_bandwidth
@@ -18,7 +19,7 @@ print("[0] Custom IPs")
 for key, data in ENVIRONMENTS.items():
     print(f"[{key}] {data['description']}")
 
-env_choice = (input("\nSelect Environment (E1-E6 or 0 for Custom, default '0'): ").strip().upper())
+env_choice = input("\nSelect Environment (E1-E6 or 0 for Custom, default '0'): ").strip().upper()
 
 use_preset = env_choice in ENVIRONMENTS
 selected_env = env_choice if use_preset else None
@@ -47,11 +48,16 @@ seq_len = int(input("Seq Length (default 128): ") or 128)
 num_layers = int(input("Num Layers (default 40): ") or 40)
 num_heads = int(input("Num Heads (default 52): ") or 52)
 embed_dim = int(input("Embed Dim (default 6656): ") or 6656)
-attention_mechanism = (input("Attention (MHA/GQA/MLP, default 'mha'): ").strip().lower() or "mha")
+attention_mechanism = input("Attention (MHA/GQA/MLP, default 'mha'): ").strip().lower() or "mha"
 
-default_vram = (int(torch.cuda.get_device_properties(0).total_memory / (1024**3))
-    if device == "cuda"
-    else 48)
+# Sanity Check
+if embed_dim % num_heads != 0:
+    raise ValueError(f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads}).")
+
+num_trials = int(input("Number of Benchmark Trials to Average (default 20): ") or 20)
+
+# Configure GPU Memory per Node
+default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3)) if device == "cuda" else 48
 
 print("\n--- Configure GPU VRAM per Node ---")
 nodes_gpu_config = []
@@ -63,39 +69,50 @@ for node in nodes:
         gpus = [float(default_vram)]
     nodes_gpu_config.append(gpus)
 
-# Benchmarks 
-print(f"\n--- Running Compute Benchmarks ({device.upper()}) ---")
+# Compute Benchmarks (Averaged over N trials)
+print(f"\n--- Running Compute Benchmarks over {num_trials} Trials ({device.upper()}) ---")
 
-mlp_cpu = MLP_CPU(embed_dim, batch_size, seq_len)
-mlp_gpu = (MLP_GPU(embed_dim, batch_size, seq_len) if device == "cuda" else mlp_cpu)
+mlp_cpu_runs, mlp_gpu_runs = [], []
+attn_cpu_runs, attn_gpu_runs = [], []
 
-if attention_mechanism == "mha":
-    mech = "MHA"
-    attn_cpu = MHA_CPU(embed_dim, batch_size, seq_len, num_heads)
-    attn_gpu = (MHA_GPU(embed_dim, batch_size, seq_len, num_heads)
-        if device == "cuda"
-        else attn_cpu
-    )
-elif attention_mechanism == "gqa":
-    mech = "GQA"
-    attn_cpu = GQA_CPU(embed_dim, batch_size, seq_len, num_heads)
-    attn_gpu = (
-        GQA_GPU(embed_dim, batch_size, seq_len, num_heads)
-        if device == "cuda"
-        else attn_cpu
-    )
-elif attention_mechanism == "mlp":
-    mech = "MLP"
-    attn_cpu = mlp_cpu
-    attn_gpu = mlp_gpu
-else:
-    raise ValueError("Attention mechanism must be mha, gqa, or mlp.")
+for t in range(num_trials):
+    # MLP
+    m_cpu = MLP_CPU(embed_dim, batch_size, seq_len)
+    m_gpu = MLP_GPU(embed_dim, batch_size, seq_len) if device == "cuda" else m_cpu
+    mlp_cpu_runs.append(m_cpu)
+    mlp_gpu_runs.append(m_gpu)
 
-print(f"MLP Time (CPU): {mlp_cpu:.4f} s | MLP Time (GPU): {mlp_gpu:.4f} s")
-print(f"{mech} Time (CPU): {attn_cpu:.4f} s | {mech} Time (GPU): {attn_gpu:.4f} s")
+    # Attention
+    if attention_mechanism == "mha":
+        mech = "MHA"
+        a_cpu = MHA_CPU(embed_dim, batch_size, seq_len, num_heads)
+        a_gpu = MHA_GPU(embed_dim, batch_size, seq_len, num_heads) if device == "cuda" else a_cpu
+    elif attention_mechanism == "gqa":
+        mech = "GQA"
+        a_cpu = GQA_CPU(embed_dim, batch_size, seq_len, num_heads)
+        a_gpu = GQA_GPU(embed_dim, batch_size, seq_len, num_heads) if device == "cuda" else a_cpu
+    elif attention_mechanism == "mlp":
+        mech = "MLP"
+        a_cpu, a_gpu = m_cpu, m_gpu
+    else:
+        raise ValueError("Attention mechanism must be mha, gqa, or mlp.")
+
+    attn_cpu_runs.append(a_cpu)
+    attn_gpu_runs.append(a_gpu)
+
+mlp_cpu = statistics.mean(mlp_cpu_runs)
+mlp_gpu = statistics.mean(mlp_gpu_runs)
+attn_cpu = statistics.mean(attn_cpu_runs)
+attn_gpu = statistics.mean(attn_gpu_runs)
+
+mlp_gpu_std = statistics.stdev(mlp_gpu_runs) if len(mlp_gpu_runs) > 1 else 0.0
+attn_gpu_std = statistics.stdev(attn_gpu_runs) if len(attn_gpu_runs) > 1 else 0.0
+
+print(f"MLP Time (CPU Mean): {mlp_cpu:.4f} s | MLP Time (GPU Mean): {mlp_gpu:.4f} s (± {mlp_gpu_std:.4f} s)")
+print(f"{mech} Time (CPU Mean): {attn_cpu:.4f} s | {mech} Time (GPU Mean): {attn_gpu:.4f} s (± {attn_gpu_std:.4f} s)")
 
 layer_compute_gpu = attn_gpu + mlp_gpu
-print(f"Single Layer GPU Time ({mech} + MLP): {layer_compute_gpu:.4f} s")
+print(f"Single Layer GPU Time Mean ({mech} + MLP): {layer_compute_gpu:.4f} s")
 print(f"Total Model GPU Time ({num_layers} Layers): {(layer_compute_gpu * num_layers):.4f} s")
 
 # Network Matrix Profiling 
@@ -113,39 +130,31 @@ else:
                     continue
                 bw = get_bandwidth(sender=s, receiver=r, env=selected_env)
                 lat = 0.050 if selected_env == "E6" else 0.003
-                t_comm = communication_time(
-                    lat, bw, batch_size, seq_len, embed_dim
-                )
+                t_comm = communication_time(lat, bw, batch_size, seq_len, embed_dim)
                 graph[s][r] = {"latency": lat, "bandwidth": bw, "t_comm": t_comm}
                 print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
     else:
         try:
             graph = network_graph(nodes)
         except Exception as e:
-            print(f"error ({e}). Falling back to default link estimation.")
+            print(f"Network probing failed ({e}). Falling back to default link estimation.")
             graph = {
-                a: {
-                    b: {"latency": 0.003, "bandwidth": 1_250_000_000.0}
-                    for b in nodes
-                    if b != a
-                }
+                a: {b: {"latency": 0.003, "bandwidth": 1_250_000_000.0} for b in nodes if b != a}
                 for a in nodes
             }
 
         for s in graph:
             for r in graph[s]:
-                lat = graph[s][r].get("latency", 0.0)
+                lat = graph[s][r].get("latency", 0.003)
                 bw = graph[s][r].get("bandwidth", 1_250_000_000.0)
-                t_comm = communication_time(
-                    lat, bw, batch_size, seq_len, embed_dim
-                )
+                t_comm = communication_time(lat, bw, batch_size, seq_len, embed_dim)
                 graph[s][r]["t_comm"] = t_comm
                 print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
 
     node_a, node_b = nodes[0], nodes[1]
-    lat_ab = graph[node_a][node_b]["latency"]
-    bw_ab = graph[node_a][node_b]["bandwidth"]
-    t_comm_ab = graph[node_a].get(node_b, {}).get("t_comm", communication_time(lat_ab, bw_ab, batch_size, seq_len, embed_dim),)
+    lat_ab = graph[node_a].get(node_b, {}).get("latency", 0.003)
+    bw_ab = graph[node_a].get(node_b, {}).get("bandwidth", 1_250_000_000.0)
+    t_comm_ab = graph[node_a].get(node_b, {}).get("t_comm", communication_time(lat_ab, bw_ab, batch_size, seq_len, embed_dim))
 
 # Dynamic Programming Scheduler 
 print("\n--- Running Dynamic Programming Scheduler ---")

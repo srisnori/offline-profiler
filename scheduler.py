@@ -4,7 +4,6 @@ from performance_model import node_cost
 def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem, minGpuMem=4.0):
     INF = float("inf")
 
-
     if isinstance(gpuMem, (int, float)):
         nodes_gpu_config = [[float(gpuMem)] for _ in range(numNodes)]
     elif isinstance(gpuMem, list):
@@ -38,6 +37,8 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
     dp[0][0] = 0  # dp[nodes][layers] best way to put these many layers into these many nodes
 
     for i in range(1, numNodes + 1): # which node we are on
+        current_node_mem = node_vram_totals[i - 1]  # <-- ADDED THIS LINE
+
         for l in range(1, numLayers + 1): # how many layers can u fit in that node
             for k in range(l + 1): # how many layers are in the current node
                 prev = dp[i - 1][k] # look at previous answers and find the best solution for rest of layers
@@ -49,7 +50,8 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                     continue
                 cost = node_cost(layersNode, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, current_node_mem)
                 
-                if cost == INF: continue
+                if cost == INF: 
+                    continue
                 res = max(prev, cost)
                 if res < dp[i][l]:
                     dp[i][l] = res

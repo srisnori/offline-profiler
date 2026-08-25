@@ -49,12 +49,19 @@ num_heads = int(input("Num Heads (default 52): ") or 52)
 embed_dim = int(input("Embed Dim (default 6656): ") or 6656)
 attention_mechanism = (input("Attention (MHA/GQA/MLP, default 'mha'): ").strip().lower() or "mha")
 
-if device == "cuda":
-    default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3))
-    vram_in = input(f"GPU Memory GB (default {default_vram}): ").strip()
-    gpu_mem = int(vram_in) if vram_in else default_vram
-else:
-    gpu_mem = 48
+default_vram = (int(torch.cuda.get_device_properties(0).total_memory / (1024**3))
+    if device == "cuda"
+    else 48)
+
+print("\n--- Configure GPU VRAM per Node ---")
+nodes_gpu_config = []
+for node in nodes:
+    gpu_input = input(f"Enter GPU VRAMs (GB) for [{node}] (e.g. '40, 40' or '80', default '{default_vram}'): ").strip()
+    if gpu_input:
+        gpus = [float(g.strip()) for g in gpu_input.split(",") if g.strip()]
+    else:
+        gpus = [float(default_vram)]
+    nodes_gpu_config.append(gpus)
 
 # Benchmarks 
 print(f"\n--- Running Compute Benchmarks ({device.upper()}) ---")
@@ -153,7 +160,7 @@ assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
-    gpuMem=gpu_mem,
+    minGpuMem=4.0,
 )
 
 print(f"\nEnvironment Mode: {selected_env if selected_env else 'Custom IPs'}")

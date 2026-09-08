@@ -54,16 +54,25 @@ num_trials = int(input("Number of Benchmark Trials to Average (default 20): ") o
 # Configure Uniform GPU VRAM and GPU Counts Per Node
 default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3)) if device == "cuda" else 40
 
-print("\n--- Configure GPU Hardware ---")
-cluster_gpu_vram = float(input(f"Enter uniform GPU VRAM per card across cluster (GB, default {default_vram}): ") or default_vram)
+print("\n--- Configure GPU Hardware per Node ---")
+node_gpu_counts = []
+node_gpu_vrams = []
 
-num_gpus_per_node = []
 for node in nodes:
-    count_input = input(f"Enter number of GPUs for [{node}] (default 1): ").strip()
-    count = int(count_input) if count_input else 1
-    num_gpus_per_node.append(count)
-    total_node_vram = count * cluster_gpu_vram
-    print(f"  -> [{node}]: {count} GPU(s) x {cluster_gpu_vram:.0f} GB = {total_node_vram:.1f} GB total VRAM")
+    print(f"\n[{node}]")
+    count_input = input(f"  Number of GPUs (default 1): ").strip()
+    num_g = int(count_input) if count_input else 1
+    
+    vram_input = input(f"  VRAM per GPU in GB (default {default_vram}): ").strip()
+    vram_g = float(vram_input) if vram_input else float(default_vram)
+    
+    total_mem = num_g * vram_g
+    node_gpu_counts.append(num_g)
+    node_gpu_vrams.append(vram_g)
+    print(f"  -> Total: {num_g} GPU(s) x {vram_g:.0f} GB = {total_mem:.1f} GB VRAM")
+
+
+
 
 # Compute Benchmarks (Averaged over N trials)
 print(f"\n--- Running Compute Benchmarks over {num_trials} Trials ({device.upper()}) ---")
@@ -171,8 +180,8 @@ assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
-    num_gpus=num_gpus_per_node,
-    gpu_vram=cluster_gpu_vram,
+    num_gpus=node_gpu_counts,   
+    gpu_vrams=node_gpu_vrams,  
     minGpuMem=4.0,
 )
 

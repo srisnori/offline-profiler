@@ -1,21 +1,6 @@
-import threading, time
-
-from network_bandwidth.receiver import receive_bandwidth
-from network_bandwidth.sender import send_bandwidth
-from network_latency import network_latency
+import math
 from bandwidth import get_bandwidth
-
-def measure_link(sender, receiver, port=5001, data_size=10_000_000):
-    data = b"x" * data_size
-    latency = network_latency(sender, receiver)
-    receiver_thread = threading.Thread(target=receive_bandwidth, args=(port,), daemon=True)
-    receiver_thread.start()
-    time.sleep(0.5)
-
-    bandwidth = send_bandwidth(receiver, data, port)
-    receiver_thread.join()
-    return {"latency": latency, "bandwidth": bandwidth}
-
+from network_latency import network_latency
 
 def network_graph(nodes, env=None):
     graph = {}
@@ -34,12 +19,19 @@ def network_graph(nodes, env=None):
             else:
                 try:
                     lat = network_latency(a, b)
+                    # Check for inf, nan, or negative values from failed probes
+                    if lat is None or math.isinf(lat) or math.isnan(lat) or lat <= 0:
+                        lat = 0.080  # Default 80ms penalty for degraded/dead node
                 except Exception:
-                    lat = 0.003
+                    lat = 0.080
                 
-                a_sub = ".".join(a.split(".")[:3])
-                b_sub = ".".join(b.split(".")[:3])
-                bw = 1_250_000_000.0 if a_sub == b_sub else 125_000_000.0
+                # Check subnet match (e.g. 129.114.108.x)
+                try:
+                    a_sub = ".".join(a.split(".")[:3])
+                    b_sub = ".".join(b.split(".")[:3])
+                    bw = 1_250_000_000.0 if a_sub == b_sub else 125_000_000.0
+                except Exception:
+                    bw = 125_000_000.0
 
             graph[a][b] = {"latency": lat, "bandwidth": bw}
 

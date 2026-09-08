@@ -13,16 +13,18 @@ from scheduler import dp_scheduler
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device.upper()}" + (f" ({torch.cuda.get_device_name(0)})" if device == "cuda" else ""))
 
-# Environment Selection 
+# Environment Selection
 print("\n--- Environment Selection ---")
-print("[0] Custom IPs")
+print("[0] Custom Manual Link Inputs (Pure Offline Simulation)")
+print("[1] Custom Live IP Probing (Online Network)")
 for key, data in ENVIRONMENTS.items():
     print(f"[{key}] {data['description']}")
 
-env_choice = input("\nSelect Environment (E1-E6 or 0 for Custom, default '0'): ").strip().upper()
+env_choice = input("\nSelect Environment (0, 1, or E1-E6, default '0'): ").strip().upper() or "0"
 
 use_preset = env_choice in ENVIRONMENTS
 selected_env = env_choice if use_preset else None
+manual_graph = None
 
 if selected_env == "E6":
     nodes = ["California", "New Jersey", "Canada"]
@@ -30,14 +32,29 @@ if selected_env == "E6":
 elif use_preset:
     nodes = ["Node_1", "Node_2", "Node_3"]
     print(f"[Selected Preset] {selected_env} ({ENVIRONMENTS[selected_env]['description']}) -> Nodes: {nodes}")
+elif env_choice == "0":
+    print("\n[Mode] Custom Manual Offline Simulation")
+    num_nodes_in = int(input("Number of Simulated Nodes (default 3): ") or 3)
+    nodes = [f"Node_{i+1}" for i in range(num_nodes_in)]
+
+    lat_ms = float(input("Link Latency in ms (e.g., 5 for LAN, 45 for WAN, default 5): ") or 5.0)
+    bw_gbps = float(input("Link Bandwidth in Gbps (e.g., 10 for LAN, 1 for WAN, default 10): ") or 10.0)
+
+    sim_lat = lat_ms / 1000.0
+    sim_bw = (bw_gbps * 1_000_000_000.0) / 8.0  # Bytes/sec
+
+    manual_graph = {
+        a: {b: {"latency": sim_lat, "bandwidth": sim_bw} for b in nodes if b != a}
+        for a in nodes
+    }
 else:
-    print("[Mode] Custom IP Profiling selected.")
+    print("\n[Mode] Custom Live IP Probing selected.")
     raw_ips = input("Enter Distributed IPs (comma-separated): ").strip()
     nodes = [ip.strip() for ip in raw_ips.split(",") if ip.strip() and not ipaddress.IPv4Address(ip.strip()).is_unspecified]
     if not nodes:
         raise ValueError("No valid IP addresses provided. Exiting.")
 
-# Model Inputs 
+# Model Inputs
 model_name = input("Model (default 'llama'): ").strip() or "llama"
 batch_size = int(input("Batch Size (default 32): ") or 32)
 seq_len = int(input("Seq Length (default 128): ") or 128)
@@ -51,7 +68,7 @@ if embed_dim % num_heads != 0:
 
 num_trials = int(input("Number of Benchmark Trials to Average (default 20): ") or 20)
 
-# Configure Uniform GPU VRAM and GPU Counts Per Node
+# Configure Hardware per Node
 default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3)) if device == "cuda" else 40
 
 print("\n--- Configure GPU Hardware per Node ---")
@@ -60,12 +77,12 @@ node_gpu_vrams = []
 
 for node in nodes:
     print(f"\n[{node}]")
-    count_input = input(f"  Number of GPUs (default 1): ").strip()
+    count_input = input("  Number of GPUs (default 1): ").strip()
     num_g = int(count_input) if count_input else 1
-    
+
     vram_input = input(f"  VRAM per GPU in GB (default {default_vram}): ").strip()
     vram_g = float(vram_input) if vram_input else float(default_vram)
-    
+
     total_mem = num_g * vram_g
     node_gpu_counts.append(num_g)
     node_gpu_vrams.append(vram_g)
@@ -117,16 +134,19 @@ layer_compute_gpu = attn_gpu + mlp_gpu
 print(f"Single Layer GPU Time Mean ({mech} + MLP): {layer_compute_gpu:.4f} s")
 print(f"Total Model GPU Time ({num_layers} Layers): {(layer_compute_gpu * num_layers):.4f} s")
 
-# Network Matrix Profiling 
+# Network Matrix Profiling
 print("\n--- Network Matrix Profiling ---")
-try:
-    graph = network_graph(nodes, env=selected_env)
-except Exception as e:
-    print(f"Network probing failed ({e}). Falling back to default link estimation.")
-    graph = {
-        a: {b: {"latency": 0.003, "bandwidth": 1_250_000_000.0} for b in nodes if b != a}
-        for a in nodes
-    }
+if manual_graph is not None:
+    graph = manual_graph
+else:
+    try:
+        graph = network_graph(nodes, env=selected_env)
+    except Exception as e:
+        print(f"Network probing failed ({e}). Falling back to default link estimation.")
+        graph = {
+            a: {b: {"latency": 0.003, "bandwidth": 1_250_000_000.0} for b in nodes if b != a}
+            for a in nodes
+        }
 
 edge_latencies = []
 edge_bandwidths = []
@@ -139,8 +159,7 @@ for i in range(len(nodes) - 1):
     edge_bandwidths.append(bw)
     print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
 
-    
-# Dynamic Programming Scheduler 
+# Dynamic Programming Scheduler
 print("\n--- Dynamic Programming Scheduler ---")
 assignment, total_cost = dp_scheduler(
     numLayers=num_layers,
@@ -153,11 +172,12 @@ assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
-    num_gpus=node_gpu_counts,   
-    gpu_vrams=node_gpu_vrams,  
+    num_gpus=node_gpu_counts,
+    gpu_vrams=node_gpu_vrams,
     minGpuMem=0.0,
 )
 
-print(f"\nEnvironment Mode: {selected_env if selected_env else 'Custom IPs'}")
+mode_str = selected_env if selected_env else ("Manual Offline Simulation" if manual_graph else "Live IPs")
+print(f"\nEnvironment Mode: {mode_str}")
 print(f"Layer Assignment per Node: {assignment}")
 print(f"Bottleneck Stage Cost (DP): {total_cost:.4f}s")

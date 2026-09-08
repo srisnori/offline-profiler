@@ -13,7 +13,7 @@ from scheduler import dp_scheduler
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device.upper()}" + (f" ({torch.cuda.get_device_name(0)})" if device == "cuda" else ""))
 
-# Env Selection 
+# Environment Selection 
 print("\n--- Environment Selection ---")
 print("[0] Custom IPs")
 for key, data in ENVIRONMENTS.items():
@@ -51,18 +51,19 @@ if embed_dim % num_heads != 0:
 
 num_trials = int(input("Number of Benchmark Trials to Average (default 20): ") or 20)
 
-# Configure GPU Memory per Node
-default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3)) if device == "cuda" else 48
+# Configure Uniform GPU VRAM and GPU Counts Per Node
+default_vram = int(torch.cuda.get_device_properties(0).total_memory / (1024**3)) if device == "cuda" else 40
 
-print("\n--- Configure GPU VRAM per Node ---")
-nodes_gpu_config = []
+print("\n--- Configure GPU Hardware ---")
+cluster_gpu_vram = float(input(f"Enter uniform GPU VRAM per card across cluster (GB, default {default_vram}): ") or default_vram)
+
+num_gpus_per_node = []
 for node in nodes:
-    gpu_input = input(f"Enter GPU VRAMs (GB) for [{node}] (e.g. '40, 40' or '80', default '{default_vram}'): ").strip()
-    if gpu_input:
-        gpus = [float(g.strip()) for g in gpu_input.split(",") if g.strip()]
-    else:
-        gpus = [float(default_vram)]
-    nodes_gpu_config.append(gpus)
+    count_input = input(f"Enter number of GPUs for [{node}] (default 1): ").strip()
+    count = int(count_input) if count_input else 1
+    num_gpus_per_node.append(count)
+    total_node_vram = count * cluster_gpu_vram
+    print(f"  -> [{node}]: {count} GPU(s) x {cluster_gpu_vram:.0f} GB = {total_node_vram:.1f} GB total VRAM")
 
 # Compute Benchmarks (Averaged over N trials)
 print(f"\n--- Running Compute Benchmarks over {num_trials} Trials ({device.upper()}) ---")
@@ -147,7 +148,7 @@ else:
                 graph[s][r]["t_comm"] = t_comm
                 print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
 
-    # Extract per-edge sequential links: Node 0 -> Node 1, Node 1 -> Node 2
+    # Extract sequential pipeline edges: Node 0 -> Node 1, Node 1 -> Node 2, ...
     edge_latencies = []
     edge_bandwidths = []
     for i in range(len(nodes) - 1):
@@ -170,10 +171,11 @@ assignment, total_cost = dp_scheduler(
     batchSize=batch_size,
     seqLen=seq_len,
     embedDim=embed_dim,
-    gpuMem=nodes_gpu_config,
+    num_gpus=num_gpus_per_node,
+    gpu_vram=cluster_gpu_vram,
     minGpuMem=4.0,
 )
 
 print(f"\nEnvironment Mode: {selected_env if selected_env else 'Custom IPs'}")
 print(f"Layer Assignment per Node: {assignment}")
-print(f"Total Cost (DP): {total_cost:.4f}s")
+print(f"Bottleneck Stage Cost (DP): {total_cost:.4f}s")

@@ -1,36 +1,33 @@
 import math
 from performance_model import node_cost
 
-def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, embedDim, gpuMem, minGpuMem=4.0):
+def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, 
+    embedDim, num_gpus, gpu_vram, minGpuMem=4.0):
     INF = float("inf")
 
-    if isinstance(gpuMem, (int, float)):
-        nodes_gpu_config = [[float(gpuMem)] for _ in range(numNodes)]
-    elif isinstance(gpuMem, list):
-        if len(gpuMem) != numNodes:
-            raise ValueError(f"Length of gpuMem ({len(gpuMem)}) must match numNodes ({numNodes}).")
-        nodes_gpu_config = []
-        for item in gpuMem:
-            if isinstance(item, (int, float)):
-                nodes_gpu_config.append([float(item)])
-            elif isinstance(item, list):
-                nodes_gpu_config.append([float(g) for g in item])
-            else:
-                raise TypeError("Each node GPU configuration must be a number or list of numbers.")
+    # check uniform GPU VRAM size
+    gpu_vram = float(gpu_vram)
+    if gpu_vram < minGpuMem:
+        raise ValueError(
+            f"Configured GPU VRAM ({gpu_vram:.2f} GB) is below the minimum "
+            f"required threshold of {minGpuMem:.2f} GB."
+        )
+
+    if isinstance(num_gpus, int):
+        node_gpu_counts = [num_gpus] * numNodes
+    elif isinstance(num_gpus, list):
+        if len(num_gpus) != numNodes:
+            raise ValueError(f"Length of num_gpus ({len(num_gpus)}) must match numNodes ({numNodes}).")
+        node_gpu_counts = [int(count) for count in num_gpus]
     else:
-        raise TypeError("gpuMem must be a float, int, or list.")
+        raise TypeError("num_gpus must be an int or a list of ints.")
 
-    # check per-GPU minimum memory 
-    for node_idx, gpus in enumerate(nodes_gpu_config):
-        for gpu_idx, mem in enumerate(gpus):
-            if mem < minGpuMem:
-                raise ValueError(
-                    f"Node {node_idx} GPU {gpu_idx} has {mem:.2f} GB VRAM, "
-                    f"which is below the minimum required threshold of {minGpuMem:.2f} GB."
-                )
+    for node_idx, count in enumerate(node_gpu_counts):
+        if count < 1:
+            raise ValueError(f"Node {node_idx} must have at least 1 GPU (got {count}).")
 
-    # calculate total VRAM per node
-    node_vram_totals = [sum(gpus) for gpus in nodes_gpu_config]
+    # total VRAM per node
+    node_vram_totals = [count * gpu_vram for count in node_gpu_counts]
 
     dp = [[INF] * (numLayers + 1) for _ in range(numNodes + 1)]
     split = [[-1] * (numLayers + 1) for _ in range(numNodes + 1)]
@@ -57,8 +54,7 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
                 if layersNode == 0:
                     continue
 
-                cost = node_cost(layersNode, t_mlp, t_attn_gpu, t_attn_cpu, cur_lat, cur_bw, batchSize, seqLen, 
-                    embedDim, current_node_mem)
+                cost = node_cost(layersNode, t_mlp, t_attn_gpu, t_attn_cpu, cur_lat, cur_bw, batchSize, seqLen, embedDim, current_node_mem)
                 
                 if cost == INF: 
                     continue
@@ -72,7 +68,6 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
         print("No layer assignment found.")
         return [], INF
 
-    # backtrack
     layersAssigned = []
     l = numLayers
     for i in range(numNodes, 0, -1):

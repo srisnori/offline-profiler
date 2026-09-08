@@ -3,7 +3,7 @@ GBPS = 1_000_000_000
 MBPS = 1_000_000
 
 def mbps_to_bytes(mbps):
-    return (mbps * MBPS) / 8 # 1.25 Gigabytes per second
+    return (mbps * MBPS) / 8  # Mbps to Bytes per second
 
 E6_RATES = {
     ("California", "New Jersey"): 312,
@@ -43,24 +43,32 @@ ENVIRONMENTS = {
     },
 }
 
+DEFAULT_LAN_MBPS = 10_000  # 10 Gbps LAN default
+
 # use envs or user inputs
 def get_bandwidth(sender=None, receiver=None, env=None):
+    # Preset environment selected
     if env:
         env = env.upper()
-        if env in ENVIRONMENTS:
-            return ENVIRONMENTS[env]["bandwidth"]
-        elif env == "E6":
+        if env == "E6":
             if sender is None or receiver is None:
                 raise ValueError("E6 requires sender and receiver region names.")
-            mbps = E6.get((sender, receiver))
+            
+            # E6
+            mbps = E6_RATES.get((sender, receiver))
             if mbps is None:
                 raise ValueError(f"Unknown E6 region pair: ({sender}, {receiver})")
             return mbps_to_bytes(mbps)
+            
+        elif env in ENVIRONMENTS:
+            return ENVIRONMENTS[env]["bandwidth"]
         else:
             raise ValueError(f"Unknown environment preset: {env}")
 
+    # Live IP pairs 
     if sender and receiver:
-        if (sender, receiver) in E6:
-            return mbps_to_bytes(E6[(sender, receiver)])
-        return mbps_to_bytes(default_mbps)
-    raise ValueError("Must specify either a preset environment 'env' or valid IP pairs.")
+        if (sender, receiver) in E6_RATES:
+            return mbps_to_bytes(E6_RATES[(sender, receiver)])
+        return mbps_to_bytes(DEFAULT_LAN_MBPS)
+
+    raise ValueError("Must specify either a preset environment 'env' or valid sender/receiver pairs.")

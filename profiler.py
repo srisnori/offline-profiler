@@ -71,9 +71,6 @@ for node in nodes:
     node_gpu_vrams.append(vram_g)
     print(f"  -> Total: {num_g} GPU(s) x {vram_g:.0f} GB = {total_mem:.1f} GB VRAM")
 
-
-
-
 # Compute Benchmarks (Averaged over N trials)
 print(f"\n--- Running Compute Benchmarks over {num_trials} Trials ({device.upper()}) ---")
 
@@ -122,51 +119,27 @@ print(f"Total Model GPU Time ({num_layers} Layers): {(layer_compute_gpu * num_la
 
 # Network Matrix Profiling 
 print("\n--- Network Matrix Profiling ---")
-graph = {a: {} for a in nodes}
+try:
+    graph = network_graph(nodes, env=selected_env)
+except Exception as e:
+    print(f"Network probing failed ({e}). Falling back to default link estimation.")
+    graph = {
+        a: {b: {"latency": 0.003, "bandwidth": 1_250_000_000.0} for b in nodes if b != a}
+        for a in nodes
+    }
 
-if len(nodes) < 2:
-    print("[Warning] Need at least 2 nodes for inter-node profiling.")
-    edge_latencies = [0.0]
-    edge_bandwidths = [1_250_000_000.0]
-else:
-    if use_preset:
-        for s in nodes:
-            for r in nodes:
-                if s == r:
-                    continue
-                bw = get_bandwidth(sender=s, receiver=r, env=selected_env)
-                lat = 0.050 if selected_env == "E6" else 0.003
-                t_comm = communication_time(lat, bw, batch_size, seq_len, embed_dim)
-                graph[s][r] = {"latency": lat, "bandwidth": bw, "t_comm": t_comm}
-                print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
-    else:
-        try:
-            graph = network_graph(nodes)
-        except Exception as e:
-            print(f"Network probing failed ({e}). Falling back to default link estimation.")
-            graph = {
-                a: {b: {"latency": 0.003, "bandwidth": 1_250_000_000.0} for b in nodes if b != a}
-                for a in nodes
-            }
+edge_latencies = []
+edge_bandwidths = []
+for i in range(len(nodes) - 1):
+    s, r = nodes[i], nodes[i + 1]
+    lat = graph.get(s, {}).get(r, {}).get("latency", 0.003)
+    bw = graph.get(s, {}).get(r, {}).get("bandwidth", 1_250_000_000.0)
+    t_comm = communication_time(lat, bw, batch_size, seq_len, embed_dim)
+    edge_latencies.append(lat)
+    edge_bandwidths.append(bw)
+    print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
 
-        for s in graph:
-            for r in graph[s]:
-                lat = graph[s][r].get("latency", 0.003)
-                bw = graph[s][r].get("bandwidth", 1_250_000_000.0)
-                t_comm = communication_time(lat, bw, batch_size, seq_len, embed_dim)
-                graph[s][r]["t_comm"] = t_comm
-                print(f"[{s} -> {r}] Latency: {lat:.4f} s | Bandwidth: {bw:.2f} B/s | T_comm: {t_comm:.4f} s")
-
-    # Extract sequential pipeline edges: Node 0 -> Node 1, Node 1 -> Node 2, ...
-    edge_latencies = []
-    edge_bandwidths = []
-    for i in range(len(nodes) - 1):
-        s, r = nodes[i], nodes[i + 1]
-        lat = graph[s].get(r, {}).get("latency", 0.003)
-        bw = graph[s].get(r, {}).get("bandwidth", 1_250_000_000.0)
-        edge_latencies.append(lat)
-        edge_bandwidths.append(bw)
-
+    
 # Dynamic Programming Scheduler 
 print("\n--- Dynamic Programming Scheduler ---")
 assignment, total_cost = dp_scheduler(

@@ -2,16 +2,8 @@ import math
 from performance_model import node_cost
 
 def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, 
-    embedDim, num_gpus, gpu_vram, minGpuMem=4.0):
+    embedDim, num_gpus, gpu_vrams, minGpuMem=4.0):
     INF = float("inf")
-
-    # check uniform GPU VRAM size
-    gpu_vram = float(gpu_vram)
-    if gpu_vram < minGpuMem:
-        raise ValueError(
-            f"Configured GPU VRAM ({gpu_vram:.2f} GB) is below the minimum "
-            f"required threshold of {minGpuMem:.2f} GB."
-        )
 
     if isinstance(num_gpus, int):
         node_gpu_counts = [num_gpus] * numNodes
@@ -26,14 +18,33 @@ def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, ba
         if count < 1:
             raise ValueError(f"Node {node_idx} must have at least 1 GPU (got {count}).")
 
-    # total VRAM per node
-    node_vram_totals = [count * gpu_vram for count in node_gpu_counts]
+    if isinstance(gpu_vrams, (int, float)):
+        node_vram_specs = [float(gpu_vrams)] * numNodes
+    elif isinstance(gpu_vrams, list):
+        if len(gpu_vrams) != numNodes:
+            raise ValueError(f"Length of gpu_vrams ({len(gpu_vrams)}) must match numNodes ({numNodes}).")
+        node_vram_specs = [float(v) for v in gpu_vrams]
+    else:
+        raise TypeError("gpu_vrams must be a float, int, or list of numbers.")
+
+    for node_idx, vram in enumerate(node_vram_specs):
+        if vram < minGpuMem:
+            raise ValueError(
+                f"Node {node_idx} GPU VRAM ({vram:.2f} GB) is below the minimum "
+                f"required threshold of {minGpuMem:.2f} GB."
+            )
+
+    # total aggregate VRAM per node
+    node_vram_totals = [
+        node_gpu_counts[i] * node_vram_specs[i] 
+        for i in range(numNodes)
+    ]
 
     dp = [[INF] * (numLayers + 1) for _ in range(numNodes + 1)]
     split = [[-1] * (numLayers + 1) for _ in range(numNodes + 1)]
     dp[0][0] = 0.0
 
-    # DP Recurrence
+    # 4. DP Recurrence
     for i in range(1, numNodes + 1):
         current_node_mem = node_vram_totals[i - 1]
 

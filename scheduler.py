@@ -2,7 +2,7 @@ import math
 from performance_model import node_cost
 
 def dp_scheduler(numLayers, numNodes, t_mlp, t_attn_gpu, t_attn_cpu, latency, bandwidth, batchSize, seqLen, 
-    embedDim, num_gpus, gpu_vrams, minGpuMem=4.0):
+    embedDim, num_gpus, gpu_vrams, minGpuMem=0.0):
     INF = float("inf")
 
     if isinstance(num_gpus, int):

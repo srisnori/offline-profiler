@@ -182,7 +182,7 @@ assignment, total_cost = dp_scheduler(
     embedDim=embed_dim,
     num_gpus=node_gpu_counts,   
     gpu_vrams=node_gpu_vrams,  
-    minGpuMem=4.0,
+    minGpuMem=0.0,
 )
 
 print(f"\nEnvironment Mode: {selected_env if selected_env else 'Custom IPs'}")

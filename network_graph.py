@@ -1,40 +1,36 @@
-import subprocess
-import re
-import socket
-import time
+import math
+from bandwidth import get_bandwidth
+from network_latency import network_latency
 
-def network_latency(sender, receiver):
-    if sender == receiver:
-        return 0.0
+def network_graph(nodes, env=None):
+    graph = {}
+    for a in nodes:
+        graph[a] = {}
+        for b in nodes:
+            if a == b:
+                continue
 
-    target = str(receiver).strip()
+            # Preset Environment Selected (E1 - E6)
+            if env is not None:
+                lat = 0.050 if env == "E6" else 0.003
+                bw = get_bandwidth(sender=a, receiver=b, env=env)
+            
+            # Custom Real IPs -> Measure Live
+            else:
+                try:
+                    lat = network_latency(a, b)
+                    if lat is None or math.isinf(lat) or math.isnan(lat) or lat <= 0:
+                        lat = 0.080
+                except Exception:
+                    lat = 0.080
+                
+                try:
+                    a_sub = ".".join(a.split(".")[:3])
+                    b_sub = ".".join(b.split(".")[:3])
+                    bw = 1_250_000_000.0 if a_sub == b_sub else 125_000_000.0
+                except Exception:
+                    bw = 125_000_000.0
 
-    try:
-        cmd = ["ping", "-c", "1", "-W", "1", target]
-        proc = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=1.2  # Python process kill deadline
-        )
-        if proc.returncode == 0:
-            match = re.search(r"rtt min/avg/max/mdev = [\d\.]+/([\d\.]+)/", proc.stdout)
-            if match:
-                return float(match.group(1)) / 1000.0
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError, Exception):
-        pass
+            graph[a][b] = {"latency": lat, "bandwidth": bw}
 
-    try:
-        t0 = time.time()
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.3)  # Hard ceiling on connect
-        s.connect((target, 22))
-        lat = time.time() - t0
-        s.close()
-        return lat
-    except Exception:
-        pass
-
-    print(f"[Warning] Host {target} unreachable. Applied 0.080s default penalty.")
-    return 0.080
+    return graph

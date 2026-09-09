@@ -14,39 +14,54 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device.upper()}" + (f" ({torch.cuda.get_device_name(0)})" if device == "cuda" else ""))
 
 # Environment Selection 
-print("\n--- Network Environment Selection ---")
-print("[0] Offline Simulation Presets (No network probing, instant)")
-print("[1] Live Cluster IP Probing (Measure real pings over the wire)")
+print("\n--- Environment Selection ---")
+print("[0] Input IPs using Default Synthetic Links (Offline - No Network Probing)")
+print("[1] Input IPs using Live Probing (Online - Measures Actual Wire Latency)")
+for key, data in ENVIRONMENTS.items():
+    print(f"[{key}] {data['description']}")
 
-mode_choice = input("\nChoose Mode ([0] Preset / [1] Live IPs, default '0'): ").strip() or "0"
+env_choice = input("\nSelect Environment (0, 1, or E1-E6, default '0'): ").strip().upper() or "0"
 
 selected_env = None
-if mode_choice == "0":
-    print("\nAvailable Offline Presets:")
-    for key, data in ENVIRONMENTS.items():
-        print(f"  [{key}] {data['description']}")
-    preset_choice = input("Select Preset (E1-E6, default 'E6'): ").strip().upper() or "E6"
-    if preset_choice not in ENVIRONMENTS:
-        print(f"Unknown preset '{preset_choice}'. Defaulting to E6.")
-        preset_choice = "E6"
-    
-    selected_env = preset_choice
+manual_graph = None
+
+if env_choice in ENVIRONMENTS:
+    selected_env = env_choice
     if selected_env == "E6":
         nodes = ["California", "New Jersey", "Canada"]
     else:
-        num_nodes = int(input("Number of Nodes (default 3): ") or 3)
-        nodes = [f"Node_{i+1}" for i in range(num_nodes)]
-    print(f"\n[Offline Mode Enabled] Using preset {selected_env} -> Nodes: {nodes}")
+        nodes = ["Node_1", "Node_2", "Node_3"]
+    print(f"[Preset Selected] {selected_env} -> Nodes: {nodes}")
 
-elif mode_choice == "1":
-    print("\n[Live Mode Enabled] Custom IP Network Discovery")
+elif env_choice == "0":
+    print("\n[Mode] IPs with Default Synthetic Network (Offline)")
+    raw_ips = input("Enter Distributed IPs (comma-separated): ").strip()
+    nodes = [ip.strip() for ip in raw_ips.split(",") if ip.strip() and not ipaddress.IPv4Address(ip.strip()).is_unspecified]
+    if not nodes:
+        raise ValueError("No valid IP addresses provided. Exiting.")
+    
+    manual_graph = {}
+    for a in nodes:
+        manual_graph[a] = {}
+        for b in nodes:
+            if a == b:
+                continue
+            a_sub = ".".join(a.split(".")[:3])
+            b_sub = ".".join(b.split(".")[:3])
+            # Same subnet -> 3ms / 10 Gbps LAN; Different subnet -> 50ms / 1 Gbps WAN
+            lat = 0.003 if a_sub == b_sub else 0.050
+            bw = 1_250_000_000.0 if a_sub == b_sub else 125_000_000.0
+            manual_graph[a][b] = {"latency": lat, "bandwidth": bw}
+
+elif env_choice == "1":
+    print("\n[Mode] Custom Live IP Probing (Online)")
     raw_ips = input("Enter Distributed IPs (comma-separated): ").strip()
     nodes = [ip.strip() for ip in raw_ips.split(",") if ip.strip() and not ipaddress.IPv4Address(ip.strip()).is_unspecified]
     if not nodes:
         raise ValueError("No valid IP addresses provided. Exiting.")
 else:
-    raise ValueError("Invalid selection. Must be 0 or 1.")
-
+    raise ValueError(f"Invalid selection: {env_choice}")
+    
 
 # Model Inputs
 model_name = input("Model (default 'llama'): ").strip() or "llama"
